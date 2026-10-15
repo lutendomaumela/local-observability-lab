@@ -1,0 +1,83 @@
+groups:
+  - name: lab-alerts
+    interval: 15s
+    rules:
+      - alert: TargetDown
+        expr: up{job!="prometheus"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus target {{ $labels.job }} is down"
+          description: "Scrapes of {{ $labels.instance }} have failed for at least 1 minute. Check the target's container health, network path, and exporter logs."
+          runbook: "See docs/RUNBOOK.md#targetdown."
+
+      - alert: HighCPU
+        expr: 100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{job="node-exporter",mode="idle"}[5m]))) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Docker host VM CPU is above 85%"
+          description: "The 5-minute average CPU utilization on {{ $labels.instance }} exceeded 85%. Check Phase 2 and correlate container CPU with recent traffic."
+          runbook: "See docs/RUNBOOK.md#highcpu."
+
+      - alert: LowDiskSpace
+        expr: 100 * node_filesystem_avail_bytes{job="node-exporter",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{job="node-exporter",mountpoint="/",fstype!~"tmpfs|overlay|squashfs"} < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Root filesystem has less than 15% free"
+          description: "The root filesystem on {{ $labels.instance }} is below 15% free. Check Docker Desktop disk usage and container volumes before removing anything."
+          runbook: "See docs/RUNBOOK.md#lowdiskspace."
+
+      - alert: HighMemory
+        expr: 100 * (1 - node_memory_MemAvailable_bytes{job="node-exporter"} / node_memory_MemTotal_bytes{job="node-exporter"}) > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Docker host VM memory use is above 90%"
+          description: "Available memory on {{ $labels.instance }} has remained below 10% for 5 minutes. Check Phase 2 and container working-set metrics."
+          runbook: "See docs/RUNBOOK.md#highmemory."
+
+      - alert: HighApplicationErrorRate
+        expr: sum(rate(http_requests_total{job="app",route="/",status=~"5.."}[5m])) / clamp_min(sum(rate(http_requests_total{job="app",route="/"}[5m])), 0.000001) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Application 5xx rate is above 5%"
+          description: "More than 5% of home-page requests returned 5xx responses over 5 minutes. Check the RED dashboard and app logs for database errors or active chaos settings."
+          runbook: "See docs/RUNBOOK.md#highapplicationerrorrate."
+
+      - alert: HighApplicationP95Latency
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job="app",route="/"}[5m]))) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Application p95 latency is above 500 ms"
+          description: "Estimated home-page p95 request duration exceeded 500 ms over 5 minutes. Compare app logs, database health, and host/container resource use."
+          runbook: "See docs/RUNBOOK.md#highapplicationp95latency."
+
+      - alert: DatabaseMetricsNoData
+        expr: absent_over_time(pg_up{job="postgres-exporter"}[5m])
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database health metrics have stopped arriving"
+          description: "No PostgreSQL exporter health samples were received for 5 minutes. This is a backup-style missing-freshness-signal exercise; inspect the exporter and Prometheus target before treating it as a database outage."
+          runbook: "See docs/RUNBOOK.md#databasemetricsnodata."
+
+      - alert: HttpProbeFailed
+        expr: probe_success{job="blackbox-http"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HTTP health probe failed"
+          description: "Blackbox Exporter could not get a successful HTTP response from {{ $labels.instance }}. Check nginx, the app health endpoint, and the Docker network path."
+          runbook: "See docs/RUNBOOK.md#httpprobefailed."

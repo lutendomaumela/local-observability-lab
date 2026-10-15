@@ -1,0 +1,6 @@
+groups:
+  - name: lab-recording-rules
+    interval: 1m
+    rules:
+      - record: lab:targets_up:count
+        expr: sum(up)

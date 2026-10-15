@@ -1,0 +1,15 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: lab-webhook
+  group_by: [alertname, job, instance]
+  group_wait: 1s
+  group_interval: 30s
+  repeat_interval: 1h
+
+receivers:
+  - name: lab-webhook
+    webhook_configs:
+      - url: http://webhook-receiver:8080/alerts
+        send_resolved: true
